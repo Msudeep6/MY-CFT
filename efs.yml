@@ -1,0 +1,71 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Master stack: PathToMasterStackFile'
+ 
+Parameters:
+  myVPC:
+    Description: select the vpc
+    Type: AWS::EC2::VPC::Id
+  subnet:
+    Description: select the subnet
+    Type: AWS::EC2::Subnet::Id
+  #amiid:
+    #Description: select the amiid
+    #Type: AWS::EC2::Image::Id
+    #Default: ami-0a85857bfc5345c38
+  #pemkey:
+    #Description: SELSECT THE PEM Key
+    #Type: AWS::EC2::KeyPair::KeyName
+  efssubnet:
+    Description: select the subnets for elastic file storage
+    Type: List<AWS::EC2::Subnet::Id>
+    Default: subnet-0fab349ad05af4898
+Resources:
+  #myEC2Instance:
+    #Type: AWS::EC2::Instance
+    #Properties:
+      #KeyName: !Ref pemkey
+      #DisableApiTermination: false 
+      #ImageId: !Ref amiid
+      #InstanceType: t2.micro
+      #Monitoring: false
+      #SubnetId: !Ref subnet
+      #UserData: 
+        #Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          # put your script here
+          #sudo yum install -y amazon-efs-utils
+          #sudo mkdir efs
+          #sudo mount -t efs fs-6955b0c3.efs.us-west-2.amazonaws.com:/ efs
+      #SecurityGroupIds: 
+          #- Ref: SimpleInstanceSgS
+  SimpleInstanceSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH access via port 22
+      VpcId: !Ref myVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0 
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0       
+# creating efs
+  efs:
+    Type: "AWS::EFS::FileSystem"
+    Properties:
+      Encrypted: false
+      PerformanceMode: generalPurpose
+      ThroughputMode: bursting
+#creating mount target   
+  mountefs:
+    Type: "AWS::EFS::MountTarget"
+    Properties:
+      FileSystemId: !Ref efs #required
+      SecurityGroups: #required
+        - !Ref SimpleInstanceSg
+      SubnetId: subnet-0fab349ad05af4898 #required
+    ##################
