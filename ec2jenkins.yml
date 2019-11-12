@@ -1,0 +1,136 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'template for jenkins server'
+
+Parameters:
+  subnetid:
+    Type: AWS::EC2::Subnet::Id
+    Description: select private subnet for jenkin server 
+  vpc:
+    Type: AWS::EC2::VPC::Id
+    Description: select the vpc for jenkins server  
+
+  keyName: 
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: select keypair foe ec2 insance
+
+  ELBsubnets: 
+    Type: AWS::EC2::Subnet::Id
+    Description: select public subnets for Load Balancer
+    
+Mappings:
+  RegionMap:
+    us-east-1: #n.verginia
+      amiID: ami-00dc79254d0461090
+    us-west-1: #n.california
+      amiID: ami-024c80694b5b3e51a
+    us-west-2: #oregon
+      amiID: ami-0a85857bfc5345c38
+
+Resources:
+  jenkinsserver:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", amiID]
+      InstanceType: t2.micro
+      KeyName: !Ref keyName
+      SecurityGroupIds:
+        - !Ref jenkinssecGroup
+      SubnetId: !Ref subnetid
+      Tags:
+        - Key: Name
+          Value: jenkins-server
+      UserData: 
+        "Fn::Base64":
+          !Sub |
+          #!/bin/bash
+          sud yum -y update
+          sudo yum remove java-1.7.0-openjdk -y
+          sudo yum install java-1.8.0 -y
+          sudo wget -O /etc/yum.repos.d/jenkins.repo http://pkg.jenkins-ci.org/redhat/jenkins.repo
+          sudo rpm --import http://pkg.jenkins-ci.org/redhat/jenkins-ci.org.key
+          sudo yum clean all 
+          sudo yum update -y
+          sudo yum install jenkins -y
+          sudo systemctl start jenkins 
+          sudo systemctl enable jenkins
+
+
+          
+#creating security group for Jenkins server 
+  jenkinssecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: jenkins security groups 
+      GroupDescription: security group for jenkins server
+      VpcId: !Ref vpc
+      SecurityGroupIngress:
+        
+        - ToPort: '8080'
+          IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: '8080'
+
+        - ToPort: '80'
+          IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: '80'
+        
+        - ToPort: '22'
+          IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: '22'
+        
+        - ToPort: '443'
+          IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: '443'      
+      
+      Tags:
+        - Key: Name
+          Value: jenkins-sg
+#creatin load balncer for jenkins server
+  elasticlaodbalncer:
+    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Properties:
+      IpAddressType: ipv4
+      Scheme: internet-facing
+      Subnets:
+        - !Ref ELBsubnets 
+      Tags:
+        - Key: Name
+          Value: Kawasaki-jenkins-ALB
+      Type: application
+#creating target group for Load Blancer
+  targetgroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 60
+      HealthCheckPath: /
+      HealthCheckPort: 80
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: Integer
+      Port: 80
+      Protocol: HTTP
+      TargetType: instance
+      Targets:
+        - ID: !Ref jenkinsserver
+      VpcId: !Ref vpc
+#creatting listners 
+  listner:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      DefaultActions: #required
+         - Type: forward
+           TargetGroupArn: !Ref jenkinsserver
+      LoadBalancerArn: String #required
+      Port: 80 #required
+      Protocol: HTTP #required
+
+  
+#Outputs:
+  #jenkinspasswords:
+   # Description: 1st time password of jeninks user   
+    #Value: !Ref JenkinsPassword=
+#################################################################
